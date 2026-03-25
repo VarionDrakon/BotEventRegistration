@@ -53,3 +53,8 @@ DB_LINK - Location where the database file will be placed.
 BOT_NAME - Name bot, this is NOT name from Telegram.
 FEEDBACK_CHAT_ID - ID of the telegram channel where the bot will send messages.
 VERSION - system variables from developer. Not change, please.
+
+
+## License
+
+[Apache License 2.0](LICENSE)
