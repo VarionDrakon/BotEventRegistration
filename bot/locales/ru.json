@@ -1,0 +1,15 @@
+{
+    "event": {
+        "registration": {
+            "create": "Отменить регистрацию",
+            "cancel": "Зарегистрироваться"
+        }
+    },
+    "common": {
+        "information": "Информация",
+        "feedback": "Написать нам"
+    },
+    "management": {
+        "control_panel": "Панель управления"
+    }
+}
