@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="res/logo.svg" alt="logoForLauncherGame.png" width="300" height="300">
+<img src="res/logo.svg" alt="res/logo.svg" width="300" height="300">
 
 # Event Registration Bot
 
