@@ -1,8 +1,10 @@
-<p align="center width="100%">
-<img width="30%" src="res/logo.svg"> 
-</p>
+<div align="center">
+
+<img src="res/logo.svg" alt="logoForLauncherGame.png" width="256" height="256">
 
 # Event Registration Bot
+
+</div>
 
 A bot for registration and event management in Telegram.
 
