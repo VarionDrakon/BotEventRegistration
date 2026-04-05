@@ -1,3 +1,8 @@
+<p align="center" width="100%">
+
+![Logo](res/logo.svg)
+
+</p>
 
 # Event Registration Bot
 
