@@ -4,7 +4,7 @@
 
 # Event Registration Bot
 
-</div>
+
 
 A bot for registration and event management in Telegram.
 
@@ -29,6 +29,8 @@ A bot for registration and event management in Telegram.
 
 [DEBIAN-badge]: https://img.shields.io/badge/Debian-A81D33?logo=debian&logoColor=fff&style=for-the-badge
 [DEBIAN-url]: https://www.debian.org/releases/trixie/
+
+</div>
 
 ## Run Locally
 

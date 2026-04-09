@@ -16,18 +16,40 @@ class Localization:
         except FileNotFoundError as e:
             logging.error(f"{e}")
     
-    async def get(self, key_path: str) -> str:
-        if not key_path:
-            return key_path
+    def get(self, key: str, **kwargs) -> str:
+        if not key:
+            return key
         
-        parts = key_path.split('.')
-        current = self.translations
+        key_path = key.split('.')
+        value = self.translations
+
+        for k in key_path:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return key
+
+        if kwargs:
+            try:
+                if isinstance(value, list):
+                    items = []
+                    for val in value:
+                        item = str(val)
+                        try:
+                            items.append(item.format(**kwargs))
+                        except KeyError as e:
+                            items.append(item)
+                            logging.error(f"Error:> {e} [:] {item} + {kwargs}")
+                    return "".join(items)
+                else:
+                    return value.format(**kwargs)
+            except KeyError as e:
+                logging.error(f"Error:> {e} [:] {key}")
+                return value
+        elif isinstance(value, list):
+            return "".join(value)
         
-        for part in parts:
-            if isinstance(current, dict) and part in current:
-                current = current[part]
-        
-        return str(current) if current is not None else key_path
+        return str(value)
 
 localization = Localization()
 

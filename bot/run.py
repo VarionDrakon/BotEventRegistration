@@ -11,9 +11,10 @@ dp = Dispatcher(storage=MemoryStorage())
 db_name = config('DB_LINK')
 bot_name = config('BOT_NAME')
 feedback_chat_id = config('FEEDBACK_CHAT_ID')
-version_bot = config('VERSION')
 organization_name = config('ORGANIZATION_NAME')
 language = config('LANGUAGE')
+
+version_bot = "Beta.v1.4 (09.04.2026)"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

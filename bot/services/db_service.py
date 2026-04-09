@@ -11,6 +11,8 @@ class Database:
         self.db_connection = db_connection
         self.connection = None
 
+    # region Preparation database
+
     async def check_database_on_startup(self):
         if not os.path.exists(db_name):
             logging.error (
@@ -89,18 +91,6 @@ class Database:
         )
         await self.connection.execute(
             '''
-                CREATE TABLE IF NOT EXISTS buttons (
-                    button_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    button_text_key TEXT NOT NULL,
-                    button_callback TEXT NOT NULL,
-                    menu_index INTEGER NOT NULL,
-                    is_active BOOLEAN DEFAULT 1,
-                    UNIQUE(button_text_key, button_callback)
-                )
-            '''
-        )
-        await self.connection.execute(
-            '''
                 CREATE TABLE IF NOT EXISTS organizations (
                     organization_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     organization_name TEXT NOT NULL,
@@ -121,11 +111,6 @@ class Database:
         await self.connection.execute(
             '''
                 CREATE INDEX IF NOT EXISTS idx_events_active ON events(event_is_active)
-            '''
-        )
-        await self.connection.execute(
-            '''
-                CREATE INDEX IF NOT EXISTS idx_button_id ON buttons(button_id)
             '''
         )
         await self.connection.execute(
@@ -160,12 +145,12 @@ class Database:
                 self.connection.close()
                 os._exit(1)
         await self.connection.commit()
+    
+    # endregion
 
-        await self.button_record_add('management.control_panel', 'ask_control_panel', 0, True)
-        await self.button_record_add('common.information', 'information', 1, True)
-        await self.button_record_add('common.feedback', 'feedback', 1, True)
+    # region Events
 
-    async def registration_record_add(self, event_id: int, telegram_user_id: int, nickname: str, telegram_username: str, additional_information: str, status: str) -> bool:
+    async def registration_record_add(self, event_id: int, telegram_user_id: int, status: str, nickname: str | None = None, telegram_username: str | None = None, additional_information: str | None = None) -> bool:
         try:
             await self.connection.execute (
                 '''
@@ -190,56 +175,7 @@ class Database:
         except aiosqlite.Error as e:
             logging.error(f"Registration error: {e}")
             return False
-    
-    async def administrators_add(self, telegram_user_id: int, organization_id: int, telegram_username: str = None) -> bool:
-        try:
-            await self.connection.execute(
-                '''
-                INSERT OR REPLACE INTO administrators
-                    (telegram_user_id, telegram_username, organization_id)
-                VALUES (?, ?, ?)
-                ''',
-                (telegram_user_id, telegram_username, organization_id)
-            )
-            await self.connection.commit()
-            return True
-        except aiosqlite.Error as e:
-            logging.error(f"Adding user to administrators failed with error: {e}")
-            return False
-        
-    async def administrators_del(self, telegram_user_id: int) -> bool:
-        try:
-            await self.connection.execute(
-                'DELETE FROM administrators WHERE telegram_user_id = ?',
-                (telegram_user_id,)
-            )
-            await self.connection.commit()
-            return self.connection.total_changes > 0
-        except aiosqlite.Error as e:
-            logging.error(f"Delete user from administrators failed with error: {e}")
-            return False
-        
-    async def administrators_list(self) -> list:
-        cursor = await self.connection.execute(
-            '''
-                SELECT 
-                    telegram_user_id,
-                    telegram_username,
-                    organization_id,
-                    join_date
-                FROM administrators
-                ORDER BY join_date DESC
-            '''
-        )
-        await self.connection.commit()
-        return await cursor.fetchall()
 
-    async def administrators_count(self) -> int:
-        cursor = await self.connection.execute("SELECT COUNT(*) FROM administrators")
-        result = await cursor.fetchone()
-        return result[0]
-    
-    
     async def add_registration_user(self, telegram_user_id: int):
         try:
             cursor = await self.connection.execute(
@@ -297,7 +233,7 @@ class Database:
         result = await cursor.fetchone()
         return result[0]
 
-    async def events_list_get(self, page: int, per_page: int, organization_id: int) -> list:
+    async def events_list_get(self, page: int | int = 1, per_page: int | int = 1, organization_id: int | int = 1) -> list:
         offset = page * per_page
         cursor = await self.connection.execute(
             '''
@@ -316,7 +252,7 @@ class Database:
         )
         return await cursor.fetchall()
 
-    async def events_list_public_get(self, page: int, per_page: int) -> list:
+    async def events_list_public_get(self, page: int | int = 0, per_page: int | int = 10) -> list:
         offset = page * per_page
         cursor = await self.connection.execute(
             '''
@@ -445,8 +381,8 @@ class Database:
         csv_buffer = StringIO()
         writer = csv.writer(csv_buffer)
         writer.writerow([
-            "ID пользователя",
-            "Дата первого использования бота",
+            "User telegram ID",
+            "Date first use",
         ])
         async for row in cursor:
             writer.writerow([
@@ -502,72 +438,61 @@ class Database:
         rows = await cursor.fetchall()
         return [row[0] for row in rows]
 
-    async def button_record_add(self, button_text_key: str, button_callback: str, menu_index: int, is_active: bool) -> bool:
+    # endregion
+
+    # region Administrators
+
+    async def administrators_add(self, telegram_user_id: int, organization_id: int, telegram_username: str = None) -> bool:
         try:
-            cursor = await self.connection.execute(
-                'SELECT 1 FROM buttons WHERE button_text_key = ? AND button_callback = ?',
-                (button_text_key, button_callback)
-            )
-            exists = await cursor.fetchone()
-            
-            if exists:
-                await self.connection.execute(
+            await self.connection.execute(
                 '''
-                    UPDATE buttons 
-                    SET button_text_key = ?,
-                        button_callback = ?,
-                        menu_index = ?,
-                        is_active = ?
-                    WHERE button_text_key = ? AND button_callback = ?
-                ''', (button_text_key, button_callback, menu_index, is_active, button_text_key, button_callback)
-                )
-                await self.connection.commit()
-                action = "updated"
-            else:
-                await self.connection.execute(
-                    '''
-                        INSERT INTO buttons (
-                            button_text_key,
-                            button_callback,
-                            menu_index,
-                            is_active
-                        ) VALUES (?, ?, ?, ?)
-                    ''', (button_text_key, button_callback, menu_index, is_active)
-                )
-                await self.connection.commit()
-                action = "added"
-            logging.info(f"Button {action}: [button_text_key:{button_text_key}] [button_callback:{button_callback}] [menu_index:{menu_index}] [is_active:{is_active}]")
+                INSERT OR REPLACE INTO administrators
+                    (telegram_user_id, telegram_username, organization_id)
+                VALUES (?, ?, ?)
+                ''',
+                (telegram_user_id, telegram_username, organization_id)
+            )
+            await self.connection.commit()
             return True
         except aiosqlite.Error as e:
-            logging.error(f"Action with the button failed with an error: {e}")
+            logging.error(f"Adding user to administrators failed with error: {e}")
             return False
         
-    async def button_record_get(self, menu_index: int) -> str:
+    async def administrators_del(self, telegram_user_id: int) -> bool:
         try:
-            cursor = await self.connection.execute (
-                '''
-                    SELECT button_text_key, button_callback
-                    FROM buttons
-                    WHERE menu_index = ? AND is_active = 1
-                    ORDER BY button_id DESC
-                ''', (menu_index,)
+            await self.connection.execute(
+                'DELETE FROM administrators WHERE telegram_user_id = ?',
+                (telegram_user_id,)
             )
-            records_buttons = await cursor.fetchall()
-            buttons_dictionary = []
-
-            for record_button in records_buttons:
-                button_text_key = record_button['button_text_key']
-                button_text = await localization.get(key_path=button_text_key)
-
-                buttons_dictionary.append({
-                    'text': button_text,
-                    'callback': record_button['button_callback'],
-                })
-
-            logging.info(f"Requested buttons from the database by index: {menu_index} ")
-            return buttons_dictionary
+            await self.connection.commit()
+            return self.connection.total_changes > 0
         except aiosqlite.Error as e:
-            logging.error(f"Request buttons from the database is finished with error: {e}")
+            logging.error(f"Delete user from administrators failed with error: {e}")
+            return False
+        
+    async def administrators_list(self) -> list:
+        cursor = await self.connection.execute(
+            '''
+                SELECT 
+                    telegram_user_id,
+                    telegram_username,
+                    organization_id,
+                    join_date
+                FROM administrators
+                ORDER BY join_date DESC
+            '''
+        )
+        await self.connection.commit()
+        return await cursor.fetchall()
+
+    async def administrators_count(self) -> int:
+        cursor = await self.connection.execute("SELECT COUNT(*) FROM administrators")
+        result = await cursor.fetchone()
+        return result[0]
+    
+    # endregion
+
+    # region Organisations
 
     async def organization_record_add(self, org_name: str) -> bool:
         try:
@@ -610,7 +535,12 @@ class Database:
         )
         result = await cursor.fetchone()
         logging.info(f'telegram_user_id:{telegram_user_id} and result:{result}')
-        return result[0]
+        try:
+            return result[0]
+        except Exception as e:
+            logging.error(f'ERROR:> telegram_user_id:{telegram_user_id} | {e}')
+    
+    # endregion
 
 db_connection = Database()
 
