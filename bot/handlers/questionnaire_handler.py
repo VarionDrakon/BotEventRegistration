@@ -20,6 +20,22 @@ class RegistrationForm(StatesGroup):
     telegram_username = State()
     addition_information = State()
 
+async def username_missing(event: Message | CallbackQuery, state: FSMContext) -> bool:
+    if event.from_user.username:
+        return False
+    form_data = await state.get_data()
+    text = localization.get('system.text.menu.registration.username_not_set',
+                            state_event_name=form_data.get('state_event_name'),
+                            state_event_date=form_data.get('state_event_date'),
+                            nickname=form_data.get('nickname') or localization.get('system.text.common.not_specified'))
+    keyboard = registration_questionnaire_keyboard("request_questionnaire_registration_check_username", "request_cancel")
+    if isinstance(event, CallbackQuery):
+        await event.message.answer(text, reply_markup=keyboard)
+        await event.answer()
+    else:
+        await event.answer(text, reply_markup=keyboard)
+    return True
+
 # region Registration - Create
 
 @questionnaire_router.callback_query(F.data == 'event_create_registration')
@@ -61,13 +77,9 @@ async def capture_event_selection_handler(callback: CallbackQuery, state: FSMCon
 @questionnaire_router.callback_query(F.data == 'ask_questionnaire_registration_nickname_skip')
 async def ask_questionnaire_handler(callback: CallbackQuery, state: FSMContext):
     await state.update_data(nickname=localization.get('system.text.common.not_specified'))
+    if await username_missing(callback, state):
+            return
     form_data = await state.get_data()
-    if not callback.message.from_user.username:
-        await callback.message.answer(localization.get('system.text.menu.registration.username_not_set',
-                                                       state_event_name=form_data.get('state_event_name'),
-                                                       state_event_date=form_data.get('state_event_date')),
-                                    reply_markup=registration_questionnaire_keyboard("request_questionnaire_registration_check_username", "request_cancel"))
-        return
     await callback.message.answer(localization.get('common.text.user_panel.registration.create.steps.username',
                                                    state_event_name=form_data.get('state_event_name'),
                                                    state_event_date=form_data.get('state_event_date'),
@@ -79,11 +91,9 @@ async def ask_questionnaire_handler(callback: CallbackQuery, state: FSMContext):
 @questionnaire_router.message(RegistrationForm.nickname, F.text)
 async def capture_nickname_handler(message: Message, state: FSMContext):
     await state.update_data(nickname=message.text)
-    form_data = await state.get_data()
-    if not message.from_user.username:
-        await message.answer(localization.get('system.text.menu.registration.username_not_set'),
-                            reply_markup=registration_questionnaire_keyboard("request_questionnaire_registration_check_username", "request_cancel"))
+    if await username_missing(callback, state):
         return
+    form_data = await state.get_data()
     await message.answer(localization.get('common.text.user_panel.registration.create.steps.username',
                                           state_event_name=form_data.get('state_event_name'),
                                           state_event_date=form_data.get('state_event_date'),
@@ -93,12 +103,9 @@ async def capture_nickname_handler(message: Message, state: FSMContext):
 # Step telegram username:
 @questionnaire_router.callback_query(F.data == "ask_questionnaire_registration_check_username")
 async def check_username_handler(callback: CallbackQuery, state: FSMContext):
+    if await username_missing(callback, state):
+            return
     form_data = await state.get_data()
-    if not callback.from_user.username:
-        await callback.message.answer(localization.get('system.text.menu.registration.username_not_set'),
-                                    reply_markup=registration_questionnaire_keyboard("request_questionnaire_registration_check_username", "request_cancel"))
-        await callback.answer()
-        return
     await state.update_data(telegram_username=callback.from_user.username)
     form_data = await state.get_data()
     await callback.message.edit_text(localization.get('common.text.user_panel.registration.create.steps.additional',
@@ -111,8 +118,9 @@ async def check_username_handler(callback: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.callback_query(F.data == 'ask_username', RegistrationForm.telegram_username)
 async def capture_telegram_username_handler(callback: CallbackQuery, state: FSMContext):
-    username = callback.from_user.username or localization.get('system.text.common.not_specified')
-    await state.update_data(telegram_username=f'{username}')
+    if await username_missing(callback, state):
+        return
+    await state.update_data(telegram_username=callback.from_user.username)
     form_data = await state.get_data()
     await callback.message.edit_text(localization.get('common.text.user_panel.registration.create.steps.additional',
                                                       state_event_name=form_data.get('state_event_name'),
@@ -150,8 +158,8 @@ async def ask_questionnaire_handler(callback: CallbackQuery, state: FSMContext):
 # Step confirmation information and registration
 @questionnaire_router.callback_query(F.data == 'ask_confirmation')
 async def ask_confirmation_handler(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_text(localization.get('system.text.menu.registration.successful', time=datetime.now()),
-                                    reply_markup=registration_questionnaire_keyboard('request_main_menu'))
+    if await username_missing(callback, state):
+        return
     form_data = await state.get_data()
     await db_connection.add_registration_user(callback.from_user.id)
     status = await db_connection.registration_record_add(event_id=form_data.get('state_event_number'),
@@ -161,6 +169,8 @@ async def ask_confirmation_handler(callback: CallbackQuery, state: FSMContext):
                                                          additional_information=form_data.get('addition_information'),
                                                          status=localization.get('system.text.event.registration.will_come'))
     if status:
+        await callback.message.edit_text(localization.get('system.text.menu.registration.successful', time=datetime.now()),
+                                        reply_markup=registration_questionnaire_keyboard('request_main_menu'))
         await state.clear()
         await callback.answer()
     else:
